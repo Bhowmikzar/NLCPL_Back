@@ -1,32 +1,15 @@
 const express = require("express");
-const axios = require("axios");
 const router = express.Router();
 const { encryptCCAvenue } = require("../utils/ccavenue");
+const { createPayPalOrder } = require("../utils/paypal");
 
 /**
- * Helper: Get PayPal access token
+ * =========================
+ * PAYMENT INITIATE
+ * =========================
  */
-const getPayPalAccessToken = async () => {
-  const auth = Buffer.from(
-    `${process.env.PAYPAL_CLIENT_ID}:${process.env.PAYPAL_SECRET}`
-  ).toString("base64");
-
-  const response = await axios.post(
-    "https://api-m.sandbox.paypal.com/v1/oauth2/token",
-    "grant_type=client_credentials",
-    {
-      headers: {
-        Authorization: `Basic ${auth}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-    }
-  );
-
-  return response.data.access_token;
-};
-
 router.post("/initiate", async (req, res) => {
-  const { region, amount, currency, course } = req.body;
+  const { region, amount, currency, course, name, email, phone } = req.body;
 
   if (!region || !amount || !currency) {
     return res.status(400).json({ error: "Missing required fields" });
@@ -39,42 +22,20 @@ router.post("/initiate", async (req, res) => {
    */
   if (region !== "IN") {
     try {
-      const accessToken = await getPayPalAccessToken();
+      const order = await createPayPalOrder(amount, currency);
 
-      const orderRes = await axios.post(
-        "https://api-m.sandbox.paypal.com/v2/checkout/orders",
-        {
-          intent: "CAPTURE",
-          purchase_units: [
-            {
-              amount: {
-                currency_code: currency,
-                value: amount.toString(),
-              },
-              description: course || "Course Purchase",
-            },
-          ],
-          application_context: {
-            return_url: process.env.PAYPAL_RETURN_URL,
-            cancel_url: process.env.PAYPAL_CANCEL_URL,
-          },
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      const approvalUrl = orderRes.data.links.find(
+      const approvalUrl = order.links?.find(
         (link) => link.rel === "approve"
       )?.href;
+
+      if (!approvalUrl) {
+        throw new Error("PayPal approval URL not found");
+      }
 
       return res.json({
         gateway: "PayPal",
         redirectUrl: approvalUrl,
-        orderId: orderRes.data.id,
+        orderId: order.id,
       });
     } catch (err) {
       console.error("PayPal error:", err.response?.data || err.message);
@@ -97,6 +58,9 @@ router.post("/initiate", async (req, res) => {
     `redirect_url=${process.env.CCA_REDIRECT_URL}`,
     `cancel_url=${process.env.CCA_CANCEL_URL}`,
     `language=EN`,
+    `billing_name=${name || "Customer"}`,
+    `billing_email=${email || "customer@example.com"}`,
+    `billing_tel=${phone || "9999999999"}`,
   ].join("&");
 
   const encRequest = encryptCCAvenue(payload, process.env.CCA_WORKING_KEY);

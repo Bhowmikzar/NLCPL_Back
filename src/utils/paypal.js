@@ -41,6 +41,10 @@ async function createPayPalOrder(amount, currency = "USD") {
           },
         },
       ],
+      application_context: {
+        return_url: process.env.PAYPAL_RETURN_URL,
+        cancel_url: process.env.PAYPAL_CANCEL_URL,
+      },
     },
     {
       headers: {
