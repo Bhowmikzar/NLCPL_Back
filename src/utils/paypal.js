@@ -57,6 +57,24 @@ async function createPayPalOrder(amount, currency = "USD") {
   return response.data;
 }
 
+async function capturePayPalOrder(orderId) {
+  const accessToken = await getPayPalAccessToken();
+
+  const response = await axios.post(
+    `${PAYPAL_BASE_URL}/v2/checkout/orders/${orderId}/capture`,
+    {},
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+    }
+  );
+
+  return response.data;
+}
+
 module.exports = {
   createPayPalOrder,
+  capturePayPalOrder,
 };
