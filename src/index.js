@@ -12,16 +12,25 @@ const app = express();
 // =========================
 // Middlewares
 // =========================
+const allowedOrigins = [
+  "http://localhost:8080",
+  "http://localhost:8081",
+  "http://localhost:5173",
+  process.env.FRONTEND_URL, // Vercel URL will be set on Render
+].filter(Boolean);
+
 app.use(
   cors({
-    origin: [
-      "http://localhost:8080", // Local development
-      "https://nextled.netlify.app", // Production frontend
-    ],
-    methods: ["GET", "POST"],
+    origin: function (origin, callback) {
+      if (!origin) return callback(null, true); // Postman/no-origin
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      return callback(new Error("Not allowed by CORS: " + origin));
+    },
+    methods: ["GET", "POST", "OPTIONS"],
     credentials: true,
   })
 );
+
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
